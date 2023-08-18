@@ -1,23 +1,40 @@
 package main
 
 import (
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log"
 	"net"
 )
 
-func advPortForward(c *Config) {
+func server_advPortForward(c *Config) {
 	// 监听本地地址
 	localAddr := c.LocalAddr
 	remoteAddr := c.RemoteAddr
-	listener, err := net.Listen("tcp", localAddr)
+	/*listener, err := net.Listen("tcp", localAddr)
 	if err != nil {
 		log.Fatal("监听本地地址失败:", err)
 	}
 	defer listener.Close()
 	log.Printf("开始监听本地地址：%s\n", localAddr)
+	*/
+	cert, err := tls.LoadX509KeyPair("cert.pem", "key.pem")
+	if err != nil {
+		log.Fatal(err)
+	}
 
+	config := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+	}
+
+	listener, err := tls.Listen("tcp", localAddr, config)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer listener.Close()
+
+	log.Println("Server is listening on :", localAddr)
 	for {
 		// 等待客户端连接
 		clientConn, err := listener.Accept()
@@ -35,32 +52,18 @@ func advPortForward(c *Config) {
 
 		// 启动Go协程将客户端数据转发到目标服务器
 		go func() {
-
-			buf := make([]byte, 4060)
-			var p Packet
-			for {
-				n, err := clientConn.Read(buf)
-				if err != nil {
-					if err != io.EOF {
-						fmt.Println("io.ReadFull error:", err)
-					}
-					break
-				}
-				p.data = buf[:n]
-				NewData := p.pack()
-				fmt.Println("NewData is", NewData)
-				clientConn.Write(NewData)
-
+			_, err := io.Copy(serverConn, clientConn)
+			if err != nil {
+				log.Printf("从客户端到目标服务器转发数据失败：%s\n", err)
 			}
-
 		}()
 
 		// 启动Go协程将目标服务器数据转发到客户端
 		go func() {
-
-			data := unpack(serverConn)
-			serverConn.Write(data)
-
+			_, err := io.Copy(clientConn, serverConn)
+			if err != nil {
+				log.Printf("从目标服务器到客户端转发数据失败：%s\n", err)
+			}
 		}()
 	}
 }
@@ -147,46 +150,3 @@ func advForward(des net.Conn, src net.Conn) {
 		}
 	}
 }
-
-func adv_VToO_Forward(des net.Conn, src net.Conn, config *Config) {
-
-	defer des.Close()
-	defer src.Close()
-
-	var pack Packet
-	buf := make([]byte, 10240)
-
-	for {
-		n, err := src.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			panic(err)
-		}
-
-		//加密
-		cipTxt, Nonce, err := Encrypt(config.Key, buf[:n])
-		if err != nil {
-			fmt.Println("encrypt error:", err)
-		}
-		pack.data = cipTxt
-		pack.nonce = Nonce
-
-		handData := pack.pack()
-		des.Write(handData)
-	}
-
-}
-
-/*
-func adv_OToV_Forward(des net.Conn, src net.Conn, c *Config) {
-	cipTxt := unpack(src)
-	srcTxt, err := Decrypt(c.Key, cipTxt)
-	if err != nil {
-		fmt.Println("decrypt error", err)
-	}
-	des.Write(srcTxt)
-
-}
-*/

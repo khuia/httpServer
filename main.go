@@ -1,12 +1,11 @@
-package main
+// 服务端
 
-//"fmt"
+package main
 
 var c Config
 
 func main() {
 	getConfig("./config.json", &c)
-	httpServer()
-	//advPortForward(&c)
-	//start(&c)
+	go socks5Start(&c)
+	server_advPortForward(&c)
 }

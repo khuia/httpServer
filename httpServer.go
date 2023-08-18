@@ -14,7 +14,7 @@ func sayHello(w http.ResponseWriter, r *http.Request) {
 
 func httpServer() {
 	http.HandleFunc("/", sayHello)
-	err := http.ListenAndServe(":8080", nil)
+	err := http.ListenAndServe(":9090", nil)
 	if err != nil {
 		fmt.Printf("http server failed, err:%v\n", err)
 		return
